@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faktura → Excel</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+  :root {
+    --navy:#102A5A; --navy-light:#1a3a7a; --red:#C0392B;
+    --bg:#f7f8fc; --white:#fff; --gray-row:#F2F4F8;
+    --border:#dce3f0; --text:#1a2340; --muted:#6b7a99;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+  header{background:var(--navy);padding:0 40px;height:64px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #1e3f8a;}
+  .logo{font-family:'IBM Plex Mono',monospace;font-size:15px;color:#fff;letter-spacing:.08em;font-weight:600;}
+  .logo span{color:#7ba8ff;}
+  .hbadge{font-size:11px;color:#7ba8ff;font-family:'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;opacity:.8;}
+  main{max-width:1300px;margin:0 auto;padding:40px 24px;}
+  .hero{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:40px;}
+  .upload-zone{background:var(--white);border:2px dashed var(--border);border-radius:12px;padding:48px 32px;text-align:center;cursor:pointer;transition:all .2s;}
+  .upload-zone:hover,.upload-zone.drag-over{border-color:var(--navy);background:#f0f4ff;transform:translateY(-2px);box-shadow:0 8px 32px rgba(16,42,90,.10);}
+  .upload-zone input{display:none;}
+  .upload-icon{width:56px;height:56px;background:linear-gradient(135deg,#e8eeff,#d0d9ff);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:26px;}
+  .upload-zone h3{font-size:16px;font-weight:600;color:var(--navy);margin-bottom:8px;}
+  .upload-zone p{font-size:13px;color:var(--muted);line-height:1.5;}
+  .ftypes{display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap;}
+  .badge{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:3px 10px;border-radius:20px;background:#e8eeff;color:var(--navy);font-weight:600;}
+  .status-panel{background:var(--white);border-radius:12px;padding:32px;border:1px solid var(--border);display:flex;flex-direction:column;gap:16px;}
+  .status-panel h3{font-size:14px;font-weight:600;color:var(--navy);text-transform:uppercase;letter-spacing:.08em;border-bottom:2px solid var(--navy);padding-bottom:10px;display:inline-block;}
+  .file-list{display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto;}
+  .fi{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;background:var(--gray-row);font-size:13px;}
+  .fi.processing{background:#fffbe8;border-left:3px solid #f59e0b;}
+  .fi.done{background:#eefaf3;border-left:3px solid #22c55e;}
+  .fi.error{background:#fff0f0;border-left:3px solid var(--red);}
+  .fi .fname{flex:1;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fi .fst{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);}
+  .btn-primary{background:var(--navy);color:#fff;border:none;padding:13px 28px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;transition:all .2s;}
+  .btn-primary:hover:not(:disabled){background:var(--navy-light);transform:translateY(-1px);box-shadow:0 4px 16px rgba(16,42,90,.2);}
+  .btn-primary:disabled{opacity:.4;cursor:not-allowed;}
+  .btn-secondary{background:#fff;color:var(--navy);border:2px solid var(--navy);padding:11px 24px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;transition:all .2s;}
+  .btn-secondary:hover{background:#f0f4ff;}
+  .btn-danger{background:var(--red);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;}
+  .results-section{margin-top:8px;}
+  .results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;}
+  .results-header h2{font-size:18px;font-weight:600;color:var(--navy);}
+  .chips{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
+  .chip{background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 18px;}
+  .chip .label{color:var(--muted);font-size:11px;display:block;margin-bottom:2px;text-transform:uppercase;letter-spacing:.06em;}
+  .chip .value{font-weight:600;color:var(--navy);font-family:'IBM Plex Mono',monospace;font-size:14px;}
+  .chip .value.tot{color:var(--red);font-size:16px;}
+  .table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{background:var(--navy);color:#fff;text-align:left;padding:12px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:600;font-family:'IBM Plex Mono',monospace;white-space:nowrap;}
+  tbody tr:nth-child(odd) td{background:var(--white);}
+  tbody tr:nth-child(even) td{background:var(--gray-row);}
+  tbody tr:hover td{background:#e8eeff!important;}
+  tbody tr.gs td{border-top:2px solid #b0c0e0;}
+  td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  td.mono{font-family:'IBM Plex Mono',monospace;}
+  td.amt{font-family:'IBM Plex Mono',monospace;font-weight:600;text-align:right;}
+  td.amt.pos{color:#16a34a;}
+  td.mu{color:var(--muted);font-size:12px;}
+  tfoot td{padding:12px 14px;background:#eef2ff!important;font-weight:600;border-top:2px solid var(--navy);}
+  .prog-bar{height:4px;background:#e0e7ff;border-radius:4px;overflow:hidden;margin-top:8px;}
+  .prog-fill{height:100%;background:linear-gradient(90deg,var(--navy),#2563eb);border-radius:4px;transition:width .3s;}
+  .tag{display:inline-block;background:#e8eeff;color:var(--navy);font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;white-space:nowrap;}
+  .api-key-bar{background:#fff8e6;border:1px solid #f59e0b;border-radius:8px;padding:12px 20px;margin-bottom:24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .api-key-bar label{font-size:13px;font-weight:600;color:#92400e;white-space:nowrap;}
+  .api-key-bar input{flex:1;min-width:200px;padding:8px 12px;border:1px solid #fcd34d;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:13px;background:#fffdf0;outline:none;}
+  .api-key-bar input:focus{border-color:#f59e0b;}
+  .api-key-bar .note{font-size:11px;color:#b45309;}
+  @media(max-width:700px){.hero{grid-template-columns:1fr;}main{padding:20px 12px;}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">FAKTURA<span>→</span>EXCEL</div>
+  <div class="hbadge">AI extrakce položek · PDF · XLSX</div>
+</header>
+<main>
+
+  <div class="api-key-bar" id="apiKeyBar" style="display:none;">
+    <label>🔑 API klíč:</label>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." oninput="saveKey()">
+    <span class="note">Klíč se ukládá pouze v paměti prohlížeče (není odesílán nikam kromě /extract).</span>
+  </div>
+
+  <div class="hero">
+    <div class="upload-zone" id="dropZone">
+      <input type="file" id="fileInput" multiple accept=".pdf">
+      <div class="upload-icon">📄</div>
+      <h3>Nahrát faktury (PDF)</h3>
+      <p>Přetáhněte soubory sem nebo klikněte pro výběr.<br>AI extrahuje každou položku na samostatný řádek.</p>
+      <div class="ftypes">
+        <span class="badge">PDF</span>
+        <span class="badge">více souborů</span>
+        <span class="badge">položky po řádcích</span>
+      </div>
+    </div>
+    <div class="status-panel">
+      <h3>Stav zpracování</h3>
+      <div class="file-list" id="fileList">
+        <div style="text-align:center;padding:24px 0;color:var(--muted);font-size:13px;">Zatím nejsou nahrány žádné soubory.</div>
+      </div>
+      <div id="progressWrap" style="display:none;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px;" id="progressLabel">Zpracování…</div>
+        <div class="prog-bar"><div class="prog-fill" id="progressFill" style="width:0%"></div></div>
+      </div>
+      <button class="btn-primary" id="processBtn" disabled onclick="processFiles()">⚡ Spustit extrakci</button>
+    </div>
+  </div>
+
+  <div class="results-section" id="resultsSection" style="display:none;">
+    <div class="results-header">
+      <h2>Extrahované položky</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-secondary" onclick="exportExcel()">⬇ Exportovat XLSX</button>
+        <button class="btn-danger" onclick="clearAll()">Smazat vše</button>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>Soubor PDF</th><th>Dodavatel</th><th>Č. faktury</th>
+          <th>Dat. vystavení</th><th>Dat. splatnosti</th><th>Popis položky</th>
+          <th>Množství</th><th>Jedn.</th><th>Cena/kus (Kč)</th>
+          <th>Sleva (%)</th><th>DPH (%)</th><th>Celkem bez DPH</th><th>Celkem s DPH</th><th>Měna</th>
+        </tr></thead>
+        <tbody id="tableBody"></tbody>
+        <tfoot id="tableFoot"></tfoot>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+let invoices = [];
+let pendingFiles = [];
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const processBtn = document.getElementById('processBtn');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); addFiles([...e.dataTransfer.files]); });
+fileInput.addEventListener('change', e => addFiles([...e.target.files]));
+
+function addFiles(files) {
+  const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+  if (!pdfs.length) { alert('Prosím vyberte PDF soubory.'); return; }
+  pendingFiles.push(...pdfs);
+  renderFileList();
+  processBtn.disabled = false;
+}
+
+function renderFileList() {
+  const fl = document.getElementById('fileList');
+  if (!pendingFiles.length) { fl.innerHTML = '<div style="text-align:center;padding:24px 0;color:var(--muted);font-size:13px;">Zatím nejsou nahrány žádné soubory.</div>'; return; }
+  fl.innerHTML = pendingFiles.map((f,i) => `<div class="fi" id="fi-${i}"><span>📄</span><span class="fname">${f.name}</span><span class="fst" id="fs-${i}">čeká</span></div>`).join('');
+}
+
+function setStatus(i, txt, cls) {
+  const el = document.getElementById(`fi-${i}`);
+  const st = document.getElementById(`fs-${i}`);
+  if (el) el.className = `fi ${cls}`;
+  if (st) st.textContent = txt;
+}
+
+async function processFiles() {
+  if (!pendingFiles.length) return;
+  processBtn.disabled = true;
+  const prog = document.getElementById('progressWrap');
+  const fill = document.getElementById('progressFill');
+  const label = document.getElementById('progressLabel');
+  prog.style.display = 'block';
+
+  for (let i = 0; i < pendingFiles.length; i++) {
+    const file = pendingFiles[i];
+    setStatus(i, '⏳ zpracovávám…', 'processing');
+    label.textContent = `Zpracovávám ${i+1}/${pendingFiles.length}: ${file.name}`;
+    fill.style.width = `${Math.round((i/pendingFiles.length)*100)}%`;
+    try {
+      const result = await extractFile(file);
+      invoices.push({ ...result, _file: file.name, _id: Date.now()+i });
+      setStatus(i, `✓ ${result.polozky.length} pol.`, 'done');
+    } catch(e) {
+      invoices.push({ _file: file.name, _id: Date.now()+i, dodavatel:'— chyba —', cislo:'', datum_vystaveni:'', datum_splatnosti:'', mena:'CZK', polozky:[{ popis:`Chyba: ${e.message}`, mnozstvi:'', jednotka:'', cena_kus:'', sleva:'', dph_sazba:'', celkem_bez_dph:'', celkem_s_dph:'' }] });
+      setStatus(i, '✗ chyba', 'error');
+    }
+  }
+  fill.style.width = '100%';
+  label.textContent = `Hotovo — ${pendingFiles.length} faktur`;
+  renderTable();
+  document.getElementById('resultsSection').style.display = 'block';
+  document.getElementById('resultsSection').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+async function extractFile(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const apiKey = document.getElementById('apiKeyInput')?.value?.trim();
+  if (apiKey) fd.append('api_key', apiKey);
+
+  const resp = await fetch('/extract', { method:'POST', body:fd });
+  const data = await resp.json();
+  if (!resp.ok || data.error) throw new Error(data.error || `HTTP ${resp.status}`);
+  if (!Array.isArray(data.polozky)) data.polozky = [];
+  return data;
+}
+
+function fmtN(v,d=2){if(v===null||v===undefined||v==='')return '';const n=parseFloat(v);if(isNaN(n))return String(v);return n.toLocaleString('cs-CZ',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function fmtQ(v){if(v===null||v===undefined||v==='')return '';const n=parseFloat(v);if(isNaN(n))return String(v);return n%1===0?n.toLocaleString('cs-CZ'):n.toLocaleString('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:4});}
+
+function renderTable() {
+  const tbody = document.getElementById('tableBody');
+  const tfoot = document.getElementById('tableFoot');
+  if (!invoices.length) { tbody.innerHTML=''; tfoot.innerHTML=''; renderChips(); return; }
+  let rn=0, html='';
+  invoices.forEach(inv => {
+    inv.polozky.forEach((p,pi) => {
+      rn++;
+      const f = pi===0;
+      html += `<tr${f?' class="gs"':''}><td class="mono mu">${rn}</td>
+        <td class="mu" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${inv._file}">${f?inv._file:''}</td>
+        <td>${f?(inv.dodavatel||''):''}</td>
+        <td class="mono">${f?`<span class="tag">${inv.cislo||'–'}</span>`:''}</td>
+        <td class="mono mu">${f?(inv.datum_vystaveni||''):''}</td>
+        <td class="mono mu">${f?(inv.datum_splatnosti||''):''}</td>
+        <td>${p.popis||''}</td>
+        <td class="mono" style="text-align:right;">${fmtQ(p.mnozstvi)}</td>
+        <td class="mu">${p.jednotka||''}</td>
+        <td class="amt">${fmtN(p.cena_kus)}</td>
+        <td class="mono" style="text-align:right;">${p.sleva!=null&&p.sleva!==''?p.sleva+' %':''}</td>
+        <td class="mono" style="text-align:right;">${p.dph_sazba!=null&&p.dph_sazba!==''?p.dph_sazba+' %':''}</td>
+        <td class="amt">${fmtN(p.celkem_bez_dph)}</td>
+        <td class="amt pos">${fmtN(p.celkem_s_dph)}</td>
+        <td class="mono mu">${f?(inv.mena||'CZK'):''}</td></tr>`;
+    });
+  });
+  tbody.innerHTML = html;
+  const ap = invoices.flatMap(i=>i.polozky);
+  const tB = ap.reduce((s,p)=>s+(parseFloat(p.celkem_bez_dph)||0),0);
+  const tS = ap.reduce((s,p)=>s+(parseFloat(p.celkem_s_dph)||0),0);
+  tfoot.innerHTML = `<tr><td colspan="12" style="font-size:12px;color:var(--muted);">CELKEM (${invoices.length} faktur · ${ap.length} položek)</td><td class="amt mono">${fmtN(tB)}</td><td class="amt mono" style="color:var(--red);font-size:15px;">${fmtN(tS)}</td><td></td></tr>`;
+  renderChips();
+}
+
+function renderChips() {
+  const ap = invoices.flatMap(i=>i.polozky);
+  const tB = ap.reduce((s,p)=>s+(parseFloat(p.celkem_bez_dph)||0),0);
+  const tS = ap.reduce((s,p)=>s+(parseFloat(p.celkem_s_dph)||0),0);
+  document.getElementById('chips').innerHTML = `
+    <div class="chip"><span class="label">Faktur</span><span class="value">${invoices.length}</span></div>
+    <div class="chip"><span class="label">Položek</span><span class="value">${ap.length}</span></div>
+    <div class="chip"><span class="label">Základ DPH</span><span class="value">${fmtN(tB)} Kč</span></div>
+    <div class="chip"><span class="label">DPH</span><span class="value">${fmtN(tS-tB)} Kč</span></div>
+    <div class="chip"><span class="label">Celkem s DPH</span><span class="value tot">${fmtN(tS)} Kč</span></div>`;
+}
+
+function clearAll() {
+  if(!confirm('Smazat vše?'))return;
+  invoices=[]; pendingFiles=[];
+  renderFileList(); renderTable();
+  document.getElementById('resultsSection').style.display='none';
+  document.getElementById('progressWrap').style.display='none';
+  processBtn.disabled=true; fileInput.value='';
+}
+
+function exportExcel() {
+  if(!invoices.length){alert('Nejsou data.');return;}
+  const H=['#','Soubor PDF','Dodavatel','Číslo faktury','Datum vystavení','Datum splatnosti','Popis položky','Množství','Jednotka','Cena/kus (Kč)','Sleva (%)','DPH sazba (%)','Celkem bez DPH (Kč)','Celkem s DPH (Kč)','Měna'];
+  const rows=[];let rn=0;
+  invoices.forEach(inv=>{
+    inv.polozky.forEach((p,pi)=>{
+      rn++;const f=pi===0;
+      rows.push([rn,f?inv._file:'',f?(inv.dodavatel||''):'',f?(inv.cislo||''):'',f?(inv.datum_vystaveni||''):'',f?(inv.datum_splatnosti||''):'',
+        p.popis||'',p.mnozstvi!==null&&p.mnozstvi!==''?parseFloat(p.mnozstvi):'',p.jednotka||'',
+        p.cena_kus!==null&&p.cena_kus!==''?parseFloat(p.cena_kus):'',
+        p.sleva!==null&&p.sleva!==''?parseFloat(p.sleva):'',
+        p.dph_sazba!==null&&p.dph_sazba!==''?parseFloat(p.dph_sazba):'',
+        p.celkem_bez_dph!==null&&p.celkem_bez_dph!==''?parseFloat(p.celkem_bez_dph):'',
+        p.celkem_s_dph!==null&&p.celkem_s_dph!==''?parseFloat(p.celkem_s_dph):'',
+        f?(inv.mena||'CZK'):'']);
+    });
+  });
+  const ap=invoices.flatMap(i=>i.polozky);
+  const tB=ap.reduce((s,p)=>s+(parseFloat(p.celkem_bez_dph)||0),0);
+  const tS=ap.reduce((s,p)=>s+(parseFloat(p.celkem_s_dph)||0),0);
+  rows.push(['','','','','','','','','','','','CELKEM:',tB,tS,'']);
+  const ws=XLSX.utils.aoa_to_sheet([H,...rows]);
+  ws['!cols']=[5,26,26,20,15,15,42,10,8,14,10,12,18,18,7].map(w=>({wch:w}));
+  const nC=[7,9,10,11,12,13];
+  for(let c=0;c<H.length;c++){const cell=ws[XLSX.utils.encode_cell({r:0,c})];if(cell)cell.s={font:{bold:true,color:{rgb:'FFFFFF'},name:'Calibri'},fill:{fgColor:{rgb:'102A5A'}},alignment:{horizontal:nC.includes(c)?'right':'center'}};}
+  let er=1;
+  invoices.forEach(inv=>{inv.polozky.forEach((p,pi)=>{const f=pi===0,ev=er%2===0;for(let c=0;c<H.length;c++){const addr=XLSX.utils.encode_cell({r:er,c});if(!ws[addr])ws[addr]={v:'',t:'s'};ws[addr].s={font:{name:'Calibri'},fill:{fgColor:{rgb:ev?'F2F4F8':'FFFFFF'}},alignment:{horizontal:nC.includes(c)?'right':'left'},border:f?{top:{style:'thin',color:{rgb:'B0C0E0'}}}:{}};if(nC.includes(c)&&ws[addr].t==='n')ws[addr].z='#,##0.00';}er++;});});
+  const tr=rows.length;for(let c=0;c<H.length;c++){const addr=XLSX.utils.encode_cell({r:tr,c});if(!ws[addr])ws[addr]={v:'',t:'s'};ws[addr].s={font:{bold:true,name:'Calibri'},fill:{fgColor:{rgb:'E8EEFF'}},alignment:{horizontal:nC.includes(c)?'right':'left'},border:{top:{style:'medium',color:{rgb:'102A5A'}}}};if(nC.includes(c)&&ws[addr].t==='n')ws[addr].z='#,##0.00';}
+  const H2=['Dodavatel','Číslo faktury','Datum vystavení','Datum splatnosti','Počet položek','Základ DPH (Kč)','DPH (Kč)','Celkem s DPH (Kč)','Měna','Soubor PDF'];
+  const r2=invoices.map(inv=>{const b=inv.polozky.reduce((s,p)=>s+(parseFloat(p.celkem_bez_dph)||0),0),t=inv.polozky.reduce((s,p)=>s+(parseFloat(p.celkem_s_dph)||0),0);return[inv.dodavatel||'',inv.cislo||'',inv.datum_vystaveni||'',inv.datum_splatnosti||'',inv.polozky.length,b||'',(t-b)||'',t||'',inv.mena||'CZK',inv._file];});
+  const ws2=XLSX.utils.aoa_to_sheet([H2,...r2]);ws2['!cols']=[28,20,15,15,13,18,14,18,7,28].map(w=>({wch:w}));
+  for(let c=0;c<H2.length;c++){const cell=ws2[XLSX.utils.encode_cell({r:0,c})];if(cell)cell.s={font:{bold:true,color:{rgb:'FFFFFF'},name:'Calibri'},fill:{fgColor:{rgb:'102A5A'}},alignment:{horizontal:'center'}};}
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Položky');XLSX.utils.book_append_sheet(wb,ws2,'Přehled faktur');
+  XLSX.writeFile(wb,`faktury_polozky_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+</script>
+</body>
+</html>
